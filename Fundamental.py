@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-myKey = "C5V82ZCI87R2RXFF"
+myKey = "myAlphaVantageKey"
 
 base_url = 'https://www.alphavantage.co/query?'
 
