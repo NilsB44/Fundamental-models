@@ -1,7 +1,9 @@
 import os
+import csv
 import time
 import json
 import requests
+import datetime as datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -37,7 +39,7 @@ def getDataFromAPI(symbol, APIKey):
             'apikey': APIKey}
         response = requests.get(base_url, params=params)
         response_dict = response.json()
-        print("   COLLECTING RELEVANT DATA   ")
+        print("AlphaVantage Limites the rate of the API call to once every 5 sec")
         if(f == 'OVERVIEW'):
             overview_data = {}
             overview_data["EBITDA"] = response_dict['EBITDA']
@@ -53,47 +55,101 @@ def getDataFromAPI(symbol, APIKey):
             latest_report = response_dict['annualReports'][0]
             print(latest_report)
             relevant_data[symbol + '_report'] = latest_report
-        time.sleep(1)
+        time.sleep(5)
     return relevant_data
 
-def writeDataToFile(data, symbol):
-    filename = symbol + '.txt'
+def writeDataToFile(data, name, end='.txt'):
+    filename = name + end
     print("Writing to file ", filename)
     with open(filename, 'w') as file:
-        file.write(json.dumps(data))
+        file.write(data)
 
-def readDataFromFile(symbol):
-    filename = symbol + '.txt'
-    with open(filename, "r") as stockfile:
-        raw = stockfile.read()
+def readJsonFromFile(name, end='.txt'):
+    filename = name + end
+    with open(filename, "r") as file:
+        raw = file.read()
     data = json.loads(raw)
-    stockfile.close()
+    file.close()
     return data
 
-def getData(symbols, APIKey):
-    relevant_data = {}
-    for symbol in symbols:
-        if os.path.isfile(filename):
-            print("has file")
-            data = readDataFromFile(symbol)
-        else:
-            data = getDataFromAPI(symbol, APIKey)
-            writeDataToFile(data, symbol)
+def readDataFromFile(name, end='.txt'):
+    filename = name + end
+    with open(filename, "r") as file:
+        raw = file.read()
+    file.close()
+    return raw
 
+def getData(symbol, APIKey):
+    relevant_data = {}
+    filename = symbol + '.txt'
+    if os.path.isfile(filename):
+        print("File exists for ", symbol)
+        relevant_data = readJsonFromFile("data/" + symbol)
+    else:
+        print("no file exists, creating file for ", symbol)
+        relevant_data = getDataFromAPI(symbol, APIKey)
+        writeDataToFile(json.dumps(relevant_data), "data/" + symbol)
+    return relevant_data
+
+def getMarkets():
+    df = pd.read_csv("data/current_symbols.txt", sep=',')
+    return df, df.exchange.unique()
+
+def getSymbols(df, market):
+    stocks = df[df.exchange == market]
+    symbols = stocks.symbol
+
+    all_sym = symbols.tolist()
+
+    return all_sym
+
+def getCurrentSymbols(APIKey):
+
+    today = time.strftime("%Y-%m-%d", time.localtime())
+    last_update = readDataFromFile("data/" + "Last_update")
+
+    moreThanOneYear = (int(today[:4]) - int(last_update[:4]) > 0)
+    moreThanOneMonth = (int(today[5:7]) - int(last_update[5:7]) > 0)
+    moreThanTenDays = (int(today[8:]) - int(last_update[8:]) > 10)
+    shouldUpdate = moreThanOneYear or moreThanOneMonth or moreThanTenDays
+
+    if(not shouldUpdate):
+        print("No update")
+        return
+    else:
+        print("Updating")
+
+    base_url = 'https://www.alphavantage.co/query?'
+    params = {'function': "LISTING_STATUS",
+            'apikey': APIKey}
+    response = requests.get(base_url, params=params)
+
+    filename = "current_symbols"
+    writeDataToFile(response.text, "data/" + filename)
+    writeDataToFile(today, "data/Last_update")
+
+def getMarketInput(markets):
+    a = ""
+    while(a not in markets):
+        print("Please choose a market {m}: ".format(m = markets))
+        a = input()
+        a = a.upper()
+    return a
 
 def main():
     APIKey = getKey("APIkey.txt")
-    #symbols = getSymbols("DJ") # market here?
-    #print(APIKey)
-    #print(symbols)
 
-    print("Testing read")
-    data = readDataFromFile("IBM")
-    print(data["Test"])
-    print("OK")
+    getCurrentSymbols(APIKey) # update or do nothing
 
+    df, markets = getMarkets()
 
+    #selectedMarket = getMarketInput(markets)
+    selectedMarket = markets[3]
+    symbols = getSymbols(df, selectedMarket) # all relevant symbols    
+    
+    print("There is {n} symbols in the selected market ({m})".format(n = len(symbols), m = selectedMarket))
 
+    data = getData(symbols[0], APIKey)
 
 
 
@@ -101,12 +157,6 @@ def main():
 #df = pd.DataFrame.from_dict(response_dict, orient='index')
 #print(df)
 
-#data, meta_data = ts.get_intraday(symbol='MSFT',interval='1min')
-#data = ts.get_overview(symbol='MSFT')
-#print(data.head())
-#data['4. close'].plot()
-#plt.title('Intraday Times Series for the MSFT stock (1 min)')
-#plt.show()
 
 if __name__ == '__main__':
     main()
